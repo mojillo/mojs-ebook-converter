@@ -12,21 +12,27 @@ enum class OutputFormat(val extension: String, val label: String) {
     EPUB("epub", "EPUB"),
     HTML("html", "HTML"),
     TXT("txt", "TXT"),
+    AZW3("azw3", "AZW3"),
 }
 
 data class ConvertResult(val output: Path, val replacements: Int)
 
 class UnsupportedBookException(message: String) : Exception(message)
 
-fun convertBook(source: Path, format: OutputFormat, removeDividers: Boolean): ConvertResult {
+fun convertBook(
+    source: Path,
+    format: OutputFormat,
+    removeDividers: Boolean,
+    ebookConvert: Path? = findEbookConvert(),
+): ConvertResult {
+    if (format == OutputFormat.AZW3) calibreOrThrow(ebookConvert)
     val extension = source.fileName.toString().substringAfterLast('.', "").lowercase()
     return when (extension) {
-        "epub" -> convertEpub(source, format, removeDividers)
-        "html", "htm" -> convertHtmlFile(source, format, removeDividers)
-        "txt" -> convertTextFile(source, format, removeDividers)
-        "fb2", "mobi", "azw", "azw3", "pdf" -> throw UnsupportedBookException(
-            "${extension.uppercase()} is not in this version yet. This version converts EPUB, HTML, and TXT.",
-        )
+        "epub" -> convertEpub(source, format, removeDividers, ebookConvert)
+        "html", "htm" -> convertHtmlFile(source, format, removeDividers, ebookConvert)
+        "txt" -> convertTextFile(source, format, removeDividers, ebookConvert)
+        "fb2", "mobi", "azw", "azw3" -> convertCalibreSource(source, format, removeDividers, ebookConvert)
+        "pdf" -> throw UnsupportedBookException("PDF is not supported.")
         else -> throw UnsupportedBookException("Unsupported file. This version converts EPUB, HTML, and TXT.")
     }
 }
@@ -43,17 +49,24 @@ internal fun outputPathFor(source: Path, format: OutputFormat): Path {
     return candidate
 }
 
-private fun convertEpub(source: Path, format: OutputFormat, removeDividers: Boolean): ConvertResult {
+private fun convertEpub(
+    source: Path,
+    format: OutputFormat,
+    removeDividers: Boolean,
+    ebookConvert: Path?,
+    outputSource: Path = source,
+): ConvertResult {
     val temp = createTempDirectory("moj-epub")
     try {
         unzipEpub(source, temp)
         val replacements = if (removeDividers) fixEpubTree(temp) else 0
-        val output = outputPathFor(source, format)
-        val title = source.fileName.toString().substringBeforeLast('.')
+        val output = outputPathFor(outputSource, format)
+        val title = outputSource.fileName.toString().substringBeforeLast('.')
         when (format) {
             OutputFormat.EPUB -> zipEpub(temp, output)
             OutputFormat.HTML -> output.writeText(chaptersToHtml(temp, title))
             OutputFormat.TXT -> output.writeText(chaptersToText(temp))
+            OutputFormat.AZW3 -> writeAzw3(temp, output, ebookConvert)
         }
         return ConvertResult(output, replacements)
     } finally {
@@ -61,7 +74,31 @@ private fun convertEpub(source: Path, format: OutputFormat, removeDividers: Bool
     }
 }
 
-private fun convertHtmlFile(source: Path, format: OutputFormat, removeDividers: Boolean): ConvertResult {
+private fun convertCalibreSource(
+    source: Path,
+    format: OutputFormat,
+    removeDividers: Boolean,
+    ebookConvert: Path?,
+): ConvertResult {
+    val converter = ebookConvert ?: throw UnsupportedBookException(
+        "${source.fileName.toString().substringAfterLast('.').uppercase()} needs Calibre. $calibreMissingMessage",
+    )
+    val staging = createTempDirectory("moj-calibre-in")
+    try {
+        val epub = staging.resolve("source.epub")
+        runEbookConvert(converter, source, epub)
+        return convertEpub(epub, format, removeDividers, converter, outputSource = source)
+    } finally {
+        staging.toFile().deleteRecursively()
+    }
+}
+
+private fun convertHtmlFile(
+    source: Path,
+    format: OutputFormat,
+    removeDividers: Boolean,
+    ebookConvert: Path?,
+): ConvertResult {
     val original = readText(source)
     val root = source.parent ?: Path.of(".")
     val (html, replacements) = if (removeDividers) {
@@ -75,11 +112,17 @@ private fun convertHtmlFile(source: Path, format: OutputFormat, removeDividers: 
         OutputFormat.HTML -> output.writeText(html)
         OutputFormat.TXT -> output.writeText(htmlToText(html))
         OutputFormat.EPUB -> writeSimpleEpub(output, title, bodyInnerHtml(html))
+        OutputFormat.AZW3 -> writeAzw3FromBody(output, title, bodyInnerHtml(html), ebookConvert)
     }
     return ConvertResult(output, replacements)
 }
 
-private fun convertTextFile(source: Path, format: OutputFormat, removeDividers: Boolean): ConvertResult {
+private fun convertTextFile(
+    source: Path,
+    format: OutputFormat,
+    removeDividers: Boolean,
+    ebookConvert: Path?,
+): ConvertResult {
     val text = readText(source)
     val output = outputPathFor(source, format)
     val title = source.fileName.toString().substringBeforeLast('.')
@@ -87,8 +130,31 @@ private fun convertTextFile(source: Path, format: OutputFormat, removeDividers: 
         OutputFormat.TXT -> output.writeText(text)
         OutputFormat.HTML -> output.writeText(textToHtml(text, title))
         OutputFormat.EPUB -> writeSimpleEpub(output, title, textToBody(text))
+        OutputFormat.AZW3 -> writeAzw3FromBody(output, title, textToBody(text), ebookConvert)
     }
     return ConvertResult(output, 0)
+}
+
+private fun writeAzw3(epubTree: Path, output: Path, ebookConvert: Path?) {
+    val staging = createTempDirectory("moj-azw3")
+    try {
+        val epub = staging.resolve("fixed.epub")
+        zipEpub(epubTree, epub)
+        runEbookConvert(calibreOrThrow(ebookConvert), epub, output)
+    } finally {
+        staging.toFile().deleteRecursively()
+    }
+}
+
+private fun writeAzw3FromBody(output: Path, title: String, bodyHtml: String, ebookConvert: Path?) {
+    val staging = createTempDirectory("moj-azw3")
+    try {
+        val epub = staging.resolve("fixed.epub")
+        writeSimpleEpub(epub, title, bodyHtml)
+        runEbookConvert(calibreOrThrow(ebookConvert), epub, output)
+    } finally {
+        staging.toFile().deleteRecursively()
+    }
 }
 
 private fun chaptersToHtml(root: Path, title: String): String {

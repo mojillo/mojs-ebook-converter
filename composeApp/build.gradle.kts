@@ -23,7 +23,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "mojs-ebook-converter"
-            packageVersion = "1.0.0"
+            packageVersion = "1.0.1"
             description = "Convert ebooks and strip Kindle divider images."
             vendor = "mOj"
             macOS {

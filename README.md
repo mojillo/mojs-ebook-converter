@@ -2,7 +2,7 @@
 
 Converts EPUB, FB2, MOBI, and similar books to AZW3, and removes the big divider images that force a Kindle to full-refresh in dark mode.
 
-This version converts **EPUB, HTML, and TXT**, and strips those dividers. FB2, MOBI, and AZW3 are next. Original files are never overwritten. Each result is saved beside the source as `name_fixed`.
+This version converts **EPUB, HTML, and TXT**, and strips those dividers. If [Calibre](https://calibre-ebook.com/download) is installed, **AZW3** is available too, and MOBI, FB2, AZW, and AZW3 files can be opened. Original files are never overwritten. Each result is saved beside the source as `name_fixed`.
 
 Divider removal is on by default. Turn it off under **Options** when you only want a format change. Covers, photos, maps, and other real figures stay.
 
@@ -34,6 +34,8 @@ Packaging uses the same sources:
 ```
 
 `packageDmg` runs on a Mac. `packageMsi` and `packageExe` run on Windows. The Windows EXE build also needs [WiX Toolset 3](https://wixtoolset.org/).
+
+AZW3 shows up in the window after Calibre is installed. Without it, the AZW3 choice stays off and the window explains where to get Calibre.
 
 ## Window
 

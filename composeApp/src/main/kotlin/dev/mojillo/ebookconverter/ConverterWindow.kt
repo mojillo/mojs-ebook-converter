@@ -61,13 +61,23 @@ private val accent = Color(0xFF2F6F62)
 
 private const val aboutText =
     "Converts EPUB, FB2, MOBI, and similar books to AZW3, and removes the big divider images that force a Kindle to full-refresh in dark mode.\n\n" +
-        "This version converts EPUB, HTML, and TXT. FB2, MOBI, and AZW3 are next. Original files are left untouched."
+        "EPUB, HTML, and TXT always work. AZW3, and opening MOBI, FB2, or AZW3, need Calibre installed. Original files are left untouched."
 
 @Composable
 fun ConverterWindow(onClose: () -> Unit) {
+    val calibreInstalled = remember { findEbookConvert() != null }
     var theme by remember { mutableStateOf(AppSettings.theme) }
     var removeDividers by remember { mutableStateOf(AppSettings.removeDividers) }
-    var format by remember { mutableStateOf(AppSettings.outputFormat) }
+    var format by remember {
+        mutableStateOf(
+            if (AppSettings.outputFormat == OutputFormat.AZW3 && !calibreInstalled) {
+                AppSettings.outputFormat = OutputFormat.EPUB
+                OutputFormat.EPUB
+            } else {
+                AppSettings.outputFormat
+            },
+        )
+    }
     var files by remember { mutableStateOf(listOf<Path>()) }
     var lines by remember { mutableStateOf(listOf<String>()) }
     var busy by remember { mutableStateOf(false) }
@@ -174,6 +184,7 @@ fun ConverterWindow(onClose: () -> Unit) {
                 ConverterScreen(
                     files = files,
                     format = format,
+                    calibreInstalled = calibreInstalled,
                     removeDividers = removeDividers,
                     lines = lines,
                     busy = busy,
@@ -212,6 +223,7 @@ fun ConverterWindow(onClose: () -> Unit) {
 private fun ConverterScreen(
     files: List<Path>,
     format: OutputFormat,
+    calibreInstalled: Boolean,
     removeDividers: Boolean,
     lines: List<String>,
     busy: Boolean,
@@ -266,9 +278,11 @@ private fun ConverterScreen(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Save as", style = MaterialTheme.typography.labelLarge)
             OutputFormat.entries.forEach { option ->
+                val available = option != OutputFormat.AZW3 || calibreInstalled
                 FilterChip(
                     selected = format == option,
-                    onClick = { onFormat(option) },
+                    onClick = { if (available) onFormat(option) },
+                    enabled = available,
                     label = { Text(option.label) },
                 )
             }
@@ -276,7 +290,13 @@ private fun ConverterScreen(
             Checkbox(checked = removeDividers, onCheckedChange = onRemoveDividers)
             Text("Remove divider images")
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (calibreInstalled) calibreFoundMessage else calibreMissingMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
