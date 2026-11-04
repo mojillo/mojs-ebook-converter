@@ -32,12 +32,18 @@ jobs:
         with:
           distribution: temurin
           java-version: "23"
-      - name: Install WiX
+      - name: Locate WiX
         shell: pwsh
         run: |
-          choco install wixtoolset --version=3.14.1 -y
-          $bin = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v3*" -Directory | Select-Object -First 1
+          $bin = Get-ChildItem "C:\Program Files*\WiX Toolset v3*" -Directory -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $bin) {
+            choco install wixtoolset -y
+            $bin = Get-ChildItem "C:\Program Files*\WiX Toolset v3*" -Directory | Select-Object -First 1
+          }
+          if (-not $bin) { throw "WiX Toolset 3 was not found" }
           "$($bin.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+          Write-Host "Using $($bin.FullName)"
       - run: ./gradlew :composeApp:packageMsi :composeApp:packageExe --no-daemon
       - uses: actions/upload-artifact@v4
         with:
