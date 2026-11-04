@@ -41,6 +41,7 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.MenuBar
@@ -126,10 +127,12 @@ fun ConverterWindow(onClose: () -> Unit) {
         }.start()
     }
 
+    val icon = painterResource("icon.png")
     Window(
         onCloseRequest = onClose,
         title = "mOj's ebook converter",
         state = rememberWindowState(width = 760.dp, height = 640.dp),
+        icon = icon,
     ) {
         MenuBar {
             Menu("File") {

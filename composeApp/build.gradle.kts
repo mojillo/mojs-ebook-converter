@@ -21,11 +21,20 @@ compose.desktop {
     application {
         mainClass = "dev.mojillo.ebookconverter.MainKt"
         nativeDistributions {
-            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "mojs-ebook-converter"
-            packageVersion = "0.1.0"
+            packageVersion = "1.0.0"
             description = "Convert ebooks and strip Kindle divider images."
             vendor = "mOj"
+            macOS {
+                iconFile.set(project.file("icons/icon.icns"))
+            }
+            windows {
+                iconFile.set(project.file("icons/icon.ico"))
+            }
+            linux {
+                iconFile.set(project.file("icons/icon.png"))
+            }
         }
     }
 }

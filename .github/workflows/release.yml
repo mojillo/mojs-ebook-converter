@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "23"
+      - run: ./gradlew :composeApp:packageDmg --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: composeApp/build/compose/binaries/main/dmg/*.dmg
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "23"
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          choco install wixtoolset --version=3.14.1 -y
+          $bin = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v3*" -Directory | Select-Object -First 1
+          "$($bin.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: ./gradlew :composeApp:packageMsi :composeApp:packageExe --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            composeApp/build/compose/binaries/main/msi/*.msi
+            composeApp/build/compose/binaries/main/exe/*.exe
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/**/*
