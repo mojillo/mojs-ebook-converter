@@ -39,6 +39,28 @@ Packaging uses the same sources:
 
 AZW3 shows up in the window after Calibre is installed. Without it, the AZW3 choice stays off and the window explains where to get Calibre.
 
+## Without the app
+
+`scripts/` is the same work as two Python files. Install the libraries once:
+
+```bash
+python3 -m pip install -r scripts/requirements.txt
+```
+
+Split one EPUB into a single folder of chapter files. Nothing is sent to a model.
+
+```bash
+python3 scripts/split_chapters.py /path/to/book.epub
+```
+
+That writes `book_chapters/` beside the EPUB, one text file per chapter. With no path, the script lists EPUBs in an `Ebooks` folder next to itself and asks for one number.
+
+Strip divider images and write an AZW3. This needs Calibre.
+
+```bash
+python3 scripts/fix_ebook_separators.py /path/to/book.epub
+```
+
 ## Window
 
 Drop EPUB, HTML, or TXT files onto the window, or use **File → Choose Files…**. Pick EPUB, HTML, or TXT, then **Convert**. **Export chapters** writes that folder of text files beside the book.
