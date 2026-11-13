@@ -13,7 +13,6 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation("org.jetbrains.compose.material3:material3:1.9.0")
     implementation("org.jsoup:jsoup:1.19.1")
-    implementation("org.json:json:20250517")
     testImplementation(kotlin("test-junit5"))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -24,8 +23,8 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb)
             packageName = "mojs-ebook-converter"
-            packageVersion = "1.1.0"
-            description = "Convert ebooks, strip Kindle divider images, and condense chapters with a local model."
+            packageVersion = "1.1.1"
+            description = "Convert ebooks, strip Kindle divider images, and export one text file per chapter."
             vendor = "mOj"
             macOS {
                 iconFile.set(project.file("icons/icon.icns"))

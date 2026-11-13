@@ -23,7 +23,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,7 +62,7 @@ private val accent = Color(0xFF2F6F62)
 private const val aboutText =
     "Converts EPUB, FB2, MOBI, and similar books to AZW3, and removes the big divider images that force a Kindle to full-refresh in dark mode.\n\n" +
         "EPUB, HTML, and TXT always work. AZW3, and opening MOBI, FB2, or AZW3, need Calibre installed. Original files are left untouched.\n\n" +
-        "Condense chapters writes a markdown summary beside the book. It needs Ollama running on this computer."
+        "Export chapters writes one text file per chapter into a folder beside the book. Take those files to whatever model you use."
 
 @Composable
 fun ConverterWindow(onClose: () -> Unit) {
@@ -83,7 +82,6 @@ fun ConverterWindow(onClose: () -> Unit) {
     var files by remember { mutableStateOf(listOf<Path>()) }
     var lines by remember { mutableStateOf(listOf<String>()) }
     var job by remember { mutableStateOf<String?>(null) }
-    var model by remember { mutableStateOf(AppSettings.ollamaModel) }
     var hovering by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var lastOutputDir by remember { mutableStateOf<Path?>(null) }
@@ -140,23 +138,19 @@ fun ConverterWindow(onClose: () -> Unit) {
         }.start()
     }
 
-    fun condense() {
+    fun export() {
         if (files.isEmpty() || job != null) return
-        val selectedModel = model.trim()
-        if (selectedModel.isEmpty()) {
-            lines = listOf("Enter an Ollama model name, for example gemma4:12b.")
-            return
-        }
-        job = "condense"
-        lines = listOf("Condensing chapters…")
+        job = "export"
+        lines = listOf("Exporting chapters…")
         val snapshot = files.toList()
         Thread {
             val results = snapshot.map { file ->
                 try {
-                    val output = condenseBook(file, selectedModel) { progress ->
+                    val output = exportChapters(file) { progress ->
                         SwingUtilities.invokeLater { lines = listOf("${file.fileName}: $progress") }
                     }
-                    file.parent to "${file.fileName} → ${output.fileName}"
+                    val count = Files.list(output).use { it.count() }
+                    output to "${file.fileName} → ${output.fileName} ($count)"
                 } catch (error: Exception) {
                     null to "${file.fileName} — ${error.message ?: "failed"}"
                 }
@@ -220,7 +214,6 @@ fun ConverterWindow(onClose: () -> Unit) {
                     removeDividers = removeDividers,
                     lines = lines,
                     job = job,
-                    model = model,
                     hovering = hovering,
                     onFormat = {
                         format = it
@@ -232,12 +225,8 @@ fun ConverterWindow(onClose: () -> Unit) {
                     },
                     onRemoveFile = { path -> files = files.filterNot { it == path } },
                     onChoose = { chooseFiles(window) },
-                    onModel = {
-                        model = it
-                        AppSettings.ollamaModel = it
-                    },
                     onConvert = { convert() },
-                    onCondense = { condense() },
+                    onExport = { export() },
                     onDropState = { hovering = it },
                     onDrop = { addPaths(it) },
                 )
@@ -265,15 +254,13 @@ private fun ConverterScreen(
     removeDividers: Boolean,
     lines: List<String>,
     job: String?,
-    model: String,
     hovering: Boolean,
     onFormat: (OutputFormat) -> Unit,
     onRemoveDividers: (Boolean) -> Unit,
     onRemoveFile: (Path) -> Unit,
     onChoose: () -> Unit,
-    onModel: (String) -> Unit,
     onConvert: () -> Unit,
-    onCondense: () -> Unit,
+    onExport: () -> Unit,
     onDropState: (Boolean) -> Unit,
     onDrop: (List<Path>) -> Unit,
 ) {
@@ -339,21 +326,6 @@ private fun ConverterScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = model,
-            onValueChange = onModel,
-            enabled = !busy,
-            singleLine = true,
-            label = { Text("Ollama model") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Condense chapters writes a markdown summary beside the book. Ollama has to be running locally.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -393,7 +365,7 @@ private fun ConverterScreen(
             Column(modifier = Modifier.weight(1f)) {
                 if (lines.isEmpty()) {
                     Text(
-                        "Originals stay put. Each result is saved beside the source as name_fixed.",
+                        "Originals stay put. Convert saves name_fixed. Export chapters saves a name_chapters folder.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -404,8 +376,8 @@ private fun ConverterScreen(
                 }
             }
             Spacer(Modifier.width(16.dp))
-            Button(onClick = onCondense, enabled = files.isNotEmpty() && !busy) {
-                Text(if (job == "condense") "Condensing…" else "Condense chapters")
+            Button(onClick = onExport, enabled = files.isNotEmpty() && !busy) {
+                Text(if (job == "export") "Exporting…" else "Export chapters")
             }
             Spacer(Modifier.width(8.dp))
             Button(onClick = onConvert, enabled = files.isNotEmpty() && !busy) {
