@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,7 +62,8 @@ private val accent = Color(0xFF2F6F62)
 
 private const val aboutText =
     "Converts EPUB, FB2, MOBI, and similar books to AZW3, and removes the big divider images that force a Kindle to full-refresh in dark mode.\n\n" +
-        "EPUB, HTML, and TXT always work. AZW3, and opening MOBI, FB2, or AZW3, need Calibre installed. Original files are left untouched."
+        "EPUB, HTML, and TXT always work. AZW3, and opening MOBI, FB2, or AZW3, need Calibre installed. Original files are left untouched.\n\n" +
+        "Condense chapters writes a markdown summary beside the book. It needs Ollama running on this computer."
 
 @Composable
 fun ConverterWindow(onClose: () -> Unit) {
@@ -80,7 +82,8 @@ fun ConverterWindow(onClose: () -> Unit) {
     }
     var files by remember { mutableStateOf(listOf<Path>()) }
     var lines by remember { mutableStateOf(listOf<String>()) }
-    var busy by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<String?>(null) }
+    var model by remember { mutableStateOf(AppSettings.ollamaModel) }
     var hovering by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
     var lastOutputDir by remember { mutableStateOf<Path?>(null) }
@@ -114,8 +117,8 @@ fun ConverterWindow(onClose: () -> Unit) {
     }
 
     fun convert() {
-        if (files.isEmpty() || busy) return
-        busy = true
+        if (files.isEmpty() || job != null) return
+        job = "convert"
         lines = listOf("Converting…")
         val snapshot = files.toList()
         val selectedFormat = format
@@ -132,7 +135,36 @@ fun ConverterWindow(onClose: () -> Unit) {
             SwingUtilities.invokeLater {
                 lastOutputDir = results.mapNotNull { it.first }.lastOrNull()
                 lines = results.map { it.second }
-                busy = false
+                job = null
+            }
+        }.start()
+    }
+
+    fun condense() {
+        if (files.isEmpty() || job != null) return
+        val selectedModel = model.trim()
+        if (selectedModel.isEmpty()) {
+            lines = listOf("Enter an Ollama model name, for example gemma4:12b.")
+            return
+        }
+        job = "condense"
+        lines = listOf("Condensing chapters…")
+        val snapshot = files.toList()
+        Thread {
+            val results = snapshot.map { file ->
+                try {
+                    val output = condenseBook(file, selectedModel) { progress ->
+                        SwingUtilities.invokeLater { lines = listOf("${file.fileName}: $progress") }
+                    }
+                    file.parent to "${file.fileName} → ${output.fileName}"
+                } catch (error: Exception) {
+                    null to "${file.fileName} — ${error.message ?: "failed"}"
+                }
+            }
+            SwingUtilities.invokeLater {
+                lastOutputDir = results.mapNotNull { it.first }.lastOrNull()
+                lines = results.map { it.second }
+                job = null
             }
         }.start()
     }
@@ -146,8 +178,8 @@ fun ConverterWindow(onClose: () -> Unit) {
     ) {
         MenuBar {
             Menu("File") {
-                Item("Choose Files…", onClick = { chooseFiles(window) }, enabled = !busy)
-                Item("Clear List", onClick = { files = emptyList() }, enabled = files.isNotEmpty() && !busy)
+                Item("Choose Files…", onClick = { chooseFiles(window) }, enabled = job == null)
+                Item("Clear List", onClick = { files = emptyList() }, enabled = files.isNotEmpty() && job == null)
                 Item("Show Output Folder", onClick = { revealOutput() }, enabled = lastOutputDir != null || files.isNotEmpty())
                 Separator()
                 Item("Quit", onClick = onClose)
@@ -187,7 +219,8 @@ fun ConverterWindow(onClose: () -> Unit) {
                     calibreInstalled = calibreInstalled,
                     removeDividers = removeDividers,
                     lines = lines,
-                    busy = busy,
+                    job = job,
+                    model = model,
                     hovering = hovering,
                     onFormat = {
                         format = it
@@ -199,7 +232,12 @@ fun ConverterWindow(onClose: () -> Unit) {
                     },
                     onRemoveFile = { path -> files = files.filterNot { it == path } },
                     onChoose = { chooseFiles(window) },
+                    onModel = {
+                        model = it
+                        AppSettings.ollamaModel = it
+                    },
                     onConvert = { convert() },
+                    onCondense = { condense() },
                     onDropState = { hovering = it },
                     onDrop = { addPaths(it) },
                 )
@@ -226,16 +264,20 @@ private fun ConverterScreen(
     calibreInstalled: Boolean,
     removeDividers: Boolean,
     lines: List<String>,
-    busy: Boolean,
+    job: String?,
+    model: String,
     hovering: Boolean,
     onFormat: (OutputFormat) -> Unit,
     onRemoveDividers: (Boolean) -> Unit,
     onRemoveFile: (Path) -> Unit,
     onChoose: () -> Unit,
+    onModel: (String) -> Unit,
     onConvert: () -> Unit,
+    onCondense: () -> Unit,
     onDropState: (Boolean) -> Unit,
     onDrop: (List<Path>) -> Unit,
 ) {
+    val busy = job != null
     val dropTarget = remember(onDrop, onDropState) {
         object : DragAndDropTarget {
             override fun onEntered(event: DragAndDropEvent) {
@@ -297,6 +339,21 @@ private fun ConverterScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = model,
+            onValueChange = onModel,
+            enabled = !busy,
+            singleLine = true,
+            label = { Text("Ollama model") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Condense chapters writes a markdown summary beside the book. Ollama has to be running locally.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(12.dp))
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -347,8 +404,12 @@ private fun ConverterScreen(
                 }
             }
             Spacer(Modifier.width(16.dp))
+            Button(onClick = onCondense, enabled = files.isNotEmpty() && !busy) {
+                Text(if (job == "condense") "Condensing…" else "Condense chapters")
+            }
+            Spacer(Modifier.width(8.dp))
             Button(onClick = onConvert, enabled = files.isNotEmpty() && !busy) {
-                Text(if (busy) "Converting…" else "Convert")
+                Text(if (job == "convert") "Converting…" else "Convert")
             }
         }
     }

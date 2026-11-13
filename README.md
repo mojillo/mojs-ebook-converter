@@ -4,6 +4,8 @@ Converts EPUB, FB2, MOBI, and similar books to AZW3, and removes the big divider
 
 This version converts **EPUB, HTML, and TXT**, and strips those dividers. If [Calibre](https://calibre-ebook.com/download) is installed, **AZW3** is available too, and MOBI, FB2, AZW, and AZW3 files can be opened. Original files are never overwritten. Each result is saved beside the source as `name_fixed`.
 
+**Condense chapters** sends each long section to a local [Ollama](https://ollama.com) model and writes `name_condensed.md` beside the book. Sections under 300 words are skipped. Ollama has to be running on this computer.
+
 Divider removal is on by default. Turn it off under **Options** when you only want a format change. Covers, photos, maps, and other real figures stay.
 
 ## Download
@@ -39,7 +41,7 @@ AZW3 shows up in the window after Calibre is installed. Without it, the AZW3 cho
 
 ## Window
 
-Drop EPUB, HTML, or TXT files onto the window, or use **File → Choose Files…**. Pick EPUB, HTML, or TXT, then **Convert**.
+Drop EPUB, HTML, or TXT files onto the window, or use **File → Choose Files…**. Pick EPUB, HTML, or TXT, then **Convert**. **Condense chapters** uses the Ollama model named in the window and writes a markdown summary beside each book.
 
 - **File:** Choose Files, Clear List, Show Output Folder, Quit.
 - **Options:** Remove divider images. Theme: System, Light, or Dark. The choice is remembered.

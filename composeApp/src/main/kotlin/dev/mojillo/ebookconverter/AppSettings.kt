@@ -30,4 +30,10 @@ object AppSettings {
         set(value) {
             preferences.put("format", value.name)
         }
+
+    var ollamaModel: String
+        get() = preferences.get("ollamaModel", "gemma4:12b").ifBlank { "gemma4:12b" }
+        set(value) {
+            preferences.put("ollamaModel", value)
+        }
 }
